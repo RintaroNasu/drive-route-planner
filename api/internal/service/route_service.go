@@ -3,6 +3,7 @@ package service
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"net/url"
 	"time"
@@ -34,7 +35,7 @@ func (s *RouteService) RouteFromPlace(places []string) (*models.RouteResponse, e
 
 	return &models.RouteResponse{
 		Points: points,
-		Route:  points,
+		Route:  buildRoute(points),
 	}, nil
 }
 
@@ -93,4 +94,52 @@ func (s *RouteService) geocode(place string) (models.Point, error) {
 		Lat:  lat,
 		Lng:  lng,
 	}, nil
+}
+
+func buildRoute(points []models.Point) []models.Point {
+	if len(points) == 0 {
+		return points
+	}
+
+	visited := make([]bool, len(points))
+	var route []models.Point
+
+	// スタート地点（最初は0番目の地点）
+	current := 0
+	route = append(route, points[current])
+	visited[current] = true
+
+	for len(route) < len(points) {
+		// 次に訪問する地点のインデックス（未決定なので-1）
+		next := -1
+
+		// 現在地点から最も近い地点を探すための最小距離（初期値は最大値）
+		minDist := math.MaxFloat64
+
+		for i := 0; i < len(points); i++ {
+			if visited[i] {
+				continue
+			}
+
+			d := distance(points[current], points[i])
+			if d < minDist {
+				minDist = d
+				next = i
+			}
+		}
+
+		visited[next] = true
+		route = append(route, points[next])
+		current = next
+	}
+
+	return route
+}
+
+func distance(a, b models.Point) float64 {
+	dx := a.Lat - b.Lat
+	dy := a.Lng - b.Lng
+
+	// ユークリッド距離（平方根は不要：比較のみのため）
+	return dx*dx + dy*dy
 }
