@@ -30,11 +30,11 @@ func HTTPErrorHandler(l *slog.Logger) echo.HTTPErrorHandler {
 			}
 			_ = c.JSON(ae.Status, map[string]interface{}{
 				"error": map[string]string{
-						"code":    ae.Code,
-						"message": ae.Message,
+					"code":    ae.Code,
+					"message": ae.Message,
 				},
-		})
-		return
+			})
+			return
 		}
 
 		// 想定外
@@ -48,8 +48,8 @@ func HTTPErrorHandler(l *slog.Logger) echo.HTTPErrorHandler {
 			"error": map[string]string{
 				"code":    "InternalError",
 				"message": "internal server error",
-				},
-			})
+			},
+		})
 		return
 	}
 }
