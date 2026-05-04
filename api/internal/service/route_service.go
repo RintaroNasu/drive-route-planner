@@ -2,11 +2,12 @@ package service
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
+	"github.com/RintaroNasu/drive-route-planner/api/internal/httpx"
 	"github.com/RintaroNasu/drive-route-planner/api/internal/models"
 )
 
@@ -18,7 +19,7 @@ func NewRouteService() *RouteService {
 
 func (s *RouteService) RouteFromPlace(places []string) (*models.RouteResponse, error) {
 	if len(places) == 0 {
-		return nil, errors.New("places is required")
+		return nil, httpx.InvalidRequest("places is required", nil)
 	}
 
 	var points []models.Point
@@ -47,18 +48,23 @@ func (s *RouteService) geocode(place string) (models.Point, error) {
 
 	fullURL := fmt.Sprintf("%s?%s", baseURL, params.Encode())
 
-	req, _ := http.NewRequest("GET", fullURL, nil)
+	req, err := http.NewRequest("GET", fullURL, nil)
+	if err != nil {
+		return models.Point{}, httpx.Internal("request creation failed", err)
+	}
 	req.Header.Set("User-Agent", "go-route-app")
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return models.Point{}, err
+		return models.Point{}, httpx.ExternalAPI("request failed", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != 200 {
-		return models.Point{}, fmt.Errorf("external api error: %d", resp.StatusCode)
+		return models.Point{}, httpx.ExternalAPI(fmt.Sprintf("external api error: %d", resp.StatusCode), nil)
 	}
 
 	var result []struct {
@@ -67,16 +73,20 @@ func (s *RouteService) geocode(place string) (models.Point, error) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return models.Point{}, err
+		return models.Point{}, httpx.Internal("json parse failed", err)
 	}
 
 	if len(result) == 0 {
-		return models.Point{}, errors.New("place not found")
+		return models.Point{}, httpx.NotFound("place not found", nil)
 	}
 
 	var lat, lng float64
-	fmt.Sscanf(result[0].Lat, "%f", &lat)
-	fmt.Sscanf(result[0].Lon, "%f", &lng)
+	if _, err := fmt.Sscanf(result[0].Lat, "%f", &lat); err != nil {
+		return models.Point{}, httpx.Internal("lat parse failed", err)
+	}
+	if _, err := fmt.Sscanf(result[0].Lon, "%f", &lng); err != nil {
+		return models.Point{}, httpx.Internal("lng parse failed", err)
+	}
 
 	return models.Point{
 		Name: place,
