@@ -12,13 +12,29 @@ import (
 	"github.com/RintaroNasu/drive-route-planner/api/internal/models"
 )
 
-type RouteService struct{}
-
-func NewRouteService() *RouteService {
-	return &RouteService{}
+type RouteService interface {
+	RouteFromPlace(places []string) (*models.RouteResponse, error)
 }
 
-func (s *RouteService) RouteFromPlace(places []string) (*models.RouteResponse, error) {
+type routeService struct {
+	geocodeFunc func(string) (models.Point, error)
+}
+
+func NewRouteService() RouteService {
+	return newRouteService(nil)
+}
+
+func newRouteService(geocodeFn func(string) (models.Point, error)) *routeService {
+	s := &routeService{}
+	if geocodeFn != nil {
+		s.geocodeFunc = geocodeFn
+	} else {
+		s.geocodeFunc = s.geocode
+	}
+	return s
+}
+
+func (s *routeService) RouteFromPlace(places []string) (*models.RouteResponse, error) {
 	if len(places) == 0 {
 		return nil, httpx.InvalidRequest("places is required", nil)
 	}
@@ -26,7 +42,7 @@ func (s *RouteService) RouteFromPlace(places []string) (*models.RouteResponse, e
 	var points []models.Point
 
 	for _, place := range places {
-		p, err := s.geocode(place)
+		p, err := s.geocodeFunc(place)
 		if err != nil {
 			return nil, err
 		}
@@ -39,7 +55,7 @@ func (s *RouteService) RouteFromPlace(places []string) (*models.RouteResponse, e
 	}, nil
 }
 
-func (s *RouteService) geocode(place string) (models.Point, error) {
+func (s *routeService) geocode(place string) (models.Point, error) {
 	baseURL := "https://nominatim.openstreetmap.org/search"
 
 	params := url.Values{}
